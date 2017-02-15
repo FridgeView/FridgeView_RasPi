@@ -15,8 +15,9 @@ from gpiozero import LED
 from time import sleep
 from gpiozero import Button
 import serial
+import ast
 
-bluetoothSerial = serial.Serial("/dev/rfcomm0", baudrate=9600 )
+bluetoothSerial = serial.Serial("/dev/rfcomm0", baudrate=9600)
 
 
 
@@ -42,8 +43,12 @@ photoClass = Object.factory(photoClassName)
 sensorDataClassName = "SensorData"
 sensorDataClass = Object.factory(sensorDataClassName)
 
-def takePic():
-    
+def buttonPressed():
+    print("button pressed")
+    takePic()
+    getSensorCubeData()
+
+def takePic():    
     led.on()
     camera.capture('newPhoto.jpg')
     led.off()
@@ -52,18 +57,25 @@ def takePic():
         encoded_string = base64.b64encode(image_file.read())
     newPhoto = photoClass(encrypStr = encoded_string,device = 0,user=U)
     newPhoto.save()
-    newSensorData = sensorDataClass(temperature = 22.7, humidity = 42, user = U)
-    newSensorData.save()
-    
 camera = picamera.PiCamera()
 camera.rotation = 180
 
+def getSensorCubeData():
+    print("getting sensor data")
+    bluetoothSerial.write('a'.encode())
+    print("Sent 'a'")
+    sensorCubeOutputString = bluetoothSerial.readline()
+    print(sensorCubeOutputString)
+    sensorCubeOutputDict = ast.literal_eval(sensorCubeOutputString)
+    newSensorData = sensorDataClass(sensorCubeID = sensorCubeOutputDict["sensorCubeID"], temperature = sensorCubeOutputDict["Temp"], humidity = sensorCubeOutputDict["Hum"], user = U)
+    newSensorData.save()
+
 while True:
     statusLed.on  
-    button.when_pressed = takePic
-    print ("Test")
-    print bluetoothSerial.readline()
-    print ("Test2")
+    button.when_pressed = buttonPressed 
+    #print ("Test")
+    #print bluetoothSerial.readline()
+    #print ("Test2")
     sleep(1)
   
 
