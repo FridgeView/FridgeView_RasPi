@@ -43,10 +43,14 @@ photoClass = Object.factory(photoClassName)
 sensorDataClassName = "SensorData"
 sensorDataClass = Object.factory(sensorDataClassName)
 
+camera = picamera.PiCamera()
+camera.rotation = 180
+
 def buttonPressed():
     print("button pressed")
     takePic()
     getSensorCubeData()
+    #getCameraCubeData()
 
 def takePic():    
     led.on()
@@ -57,8 +61,7 @@ def takePic():
         encoded_string = base64.b64encode(image_file.read())
     newPhoto = photoClass(encrypStr = encoded_string,device = 0,user=U)
     newPhoto.save()
-camera = picamera.PiCamera()
-camera.rotation = 180
+
 
 def getSensorCubeData():
     print("getting sensor data")
@@ -66,10 +69,23 @@ def getSensorCubeData():
     print("Sent 'a'")
     sensorCubeOutputString = bluetoothSerial.readline()
     print(sensorCubeOutputString)
-    sensorCubeOutputDict = ast.literal_eval(sensorCubeOutputString)
-    newSensorData = sensorDataClass(sensorCubeID = sensorCubeOutputDict["sensorCubeID"], temperature = sensorCubeOutputDict["Temp"], humidity = sensorCubeOutputDict["Hum"], user = U)
-    newSensorData.save()
+    try:
+        sensorCubeOutputDict = ast.literal_eval(sensorCubeOutputString)
+        newSensorData = sensorDataClass(sensorCubeID = sensorCubeOutputDict["sensorCubeID"], temperature = sensorCubeOutputDict["Temp"], humidity = sensorCubeOutputDict["Hum"], user = U)
+        newSensorData.save()
+    except:
+        print("An exception has ocurred. Likely failed to convert data.")
+        pass
 
+def getCameraCubeData():
+    print("getting data from camera cube")
+    while True:
+        cameraCubeOutput = bluetoothSerial.readline()
+        print(cameraCubeOutput)
+        file = open("cameradata.jpeg", "w")
+        file.write(cameraCubeOutput)
+        file.close
+        
 while True:
     statusLed.on  
     button.when_pressed = buttonPressed 
