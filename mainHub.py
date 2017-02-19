@@ -16,6 +16,7 @@ from time import sleep
 from gpiozero import Button
 import serial
 import ast
+import qrtools
 
 bluetoothSerial = serial.Serial("/dev/rfcomm0", baudrate=9600)
 
@@ -48,8 +49,9 @@ camera.rotation = 180
 
 def buttonPressed():
     print("button pressed")
-    takePic()
-    getSensorCubeData()
+    scanQRCode()
+    #takePic()
+    #getSensorCubeData()
     #getCameraCubeData()
 
 def takePic():    
@@ -62,6 +64,15 @@ def takePic():
     newPhoto = photoClass(encrypStr = encoded_string,device = 0,user=U)
     newPhoto.save()
 
+def scanQRCode():
+    print("taking photo for QR Scan")
+    camera.capture('qrPhoto.jpg')
+    from qrtools import QR
+    myCode = QR(filename = u"./qrPhoto.jpg")
+    if myCode.decode():
+          print myCode.data
+          print myCode.data_type
+          print myCode.data_to_string()
 
 def getSensorCubeData():
     print("getting sensor data")
