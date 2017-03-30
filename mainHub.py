@@ -86,6 +86,8 @@ def connectToWifi(wifiName, wifiPassword, wifiEncryption):
     file.close()
     os.system("sudo reboot")
 
+logIn()
+
 #random string for uploading picture to the server
 def randomstr(length):
     return ''.join(random.choice(string.lowercase) for i in range(length))
