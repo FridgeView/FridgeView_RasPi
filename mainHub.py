@@ -14,18 +14,20 @@ from parse_rest.datatypes import Object
 from parse_rest.connection import SessionToken, register
 from gpiozero import LED
 from time import sleep
+import time
+import signal
 from gpiozero import Button
 import serial
 import ast
 import qrtools
 import RPi.GPIO as GPIO
+import subprocess
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(18, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 GPIO.setup(23, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 GPIO.setup(25, GPIO.OUT, initial=GPIO.LOW)
 led = LED(17)
 button = Button(27)
-qrTry = 0
 APPLICATION_ID = "FVAPPID123456789bcdjk"
 REST_API_KEY = "A"
 MASTER_KEY = "FVMASTERKEY123456789bcdjk"
@@ -44,16 +46,22 @@ CubeClass = Object.factory(CubeClassName)
 
 CentralHubClassName = "CentralHub"
 CentralHubClass = Object.factory(CentralHubClassName)
-
 CentralHubObject = CentralHubClass(objectId=CENTRALHUBID)
 
 camera = picamera.PiCamera()
 camera.rotation = 180
 
 bluetoothSerial = None
+logInSuccess = False  
 
+def poweroff():
+    print("powering off...")
+    GPIO.output(25, GPIO.HIGH)
+    sleep(5)
+    #os.system("sudo poweroff")
 
 def logIn():
+    global logInSuccess
     try:
         file = open("info.txt", "r")
         username = file.readline().rstrip('\n')
@@ -61,6 +69,7 @@ def logIn():
         print(username)
         print(pw)
         U = User.login(username,pw)
+        logInSuccess = True 
         try:
             print(U.defaultCentralHub)
         except:
@@ -74,19 +83,31 @@ def logIn():
         print("Connected successfully!")
     except Exception as e:
         print("Couldn't log in")
+        logInSuccess = False
         print(e)
-        GPIO.output(25, GPIO.HIGH)
-        sleep(5)
-        os.system("sudo poweroff")
         pass
 
+def wifiToggle():
+    print("setting up wifi")
+    os.system("sudo ifdown wlan0")
+    sleep(2)
+    p = subprocess.Popen(['sudo', 'ifdown', 'wlan0'])
+    try:
+        p.wait(10)
+    except:
+        print("sub timedout")
+        os.kill(p.pid, signal.SIGINT)
+    #os.system("sudo ifup wlan0")
+    sleep(2)
+    print("log in")
+    logIn()
 
 def saveUser(userEmail, userPassword):
     f = open("info.txt", "w")
     f.write(userEmail + "\n" + userPassword)
     f.close()
     
-def connectToWifi(wifiName, wifiPassword, wifiEncryption):
+def connectToWifi(wifiName, wifiPassword):
     file = open("/etc/network/interfaces", "w")
     file.write("source-directory /etc/network/interfaces.d" + "\n")
     file.write("allow-hotplug wlan0"+ "\n")
@@ -95,23 +116,10 @@ def connectToWifi(wifiName, wifiPassword, wifiEncryption):
     file.write("    wpa-ssid \""+wifiName+"\"" + "\n")
     file.write("    wpa-psk \""+wifiPassword+"\"" + "\n")               
     file.close()
+    wifiToggle()
     #os.system("sudo reboot")
 
-
-#random string for uploading picture to the server
-def randomstr(length):
-    return ''.join(random.choice(string.lowercase) for i in range(length))
-
-def buttonPressed():
-    print("button pressed")
-    #sleep(5)
-    #scanQRCode()
-    #takePic()
-    #£fetchCubes(2) #Sensor Cubes
-    #fetchCubes(1) #Camera Cubes
-    
 def takePic():
-    #randomFileName = randomstr(16) + ".jpg"
     randomFileName = "centralHubPhoto.jpg"
     camera.capture(randomFileName)
     print("I'm taking a photo!")
@@ -121,8 +129,8 @@ def takePic():
     parsePhotoFile.save()
     parseCentralHubData = CentralHubDataClass(photoFile = parsePhotoFile, centralHub = CentralHubObject)
     parseCentralHubData.save()
-
-def scanQRCode():
+    
+def scanQRCode(startTime):
     print("taking photo for QR Scan")
     camera.capture('qrPhoto.jpg')
     from qrtools import QR
@@ -132,38 +140,43 @@ def scanQRCode():
         try:
             qrCodeOutputDict = ast.literal_eval(qrCode.data_to_string())
             if qrCodeOutputDict["Type"]=="Cube":
-                newCubeFunc = Function("newCube")
-                funcOutput = newCubeFunc(cubeID = qrCodeOutputDict["CubeID"], centralHubID = CENTRALHUBID)        
-                if funcOutput["result"] == "error":
-                    print("Error!")
-                elif funcOutput["result"] == "in use":
-                    print("Cube in use!")
+                global logInSuccess
+                if logInSuccess == True:   
+                    newCubeFunc = Function("newCube")
+                    funcOutput = newCubeFunc(cubeID = qrCodeOutputDict["CubeID"], centralHubID = CENTRALHUBID)        
+                    if funcOutput["result"] == "error":
+                        print("Error!")
+                    elif funcOutput["result"] == "in use":
+                        print("Cube in use!")
+                    else:
+                        #try first time pin here
+                        #echo -e 'agent on \n pair ' + funcOutput["result"] + '\n 1234 \n quit' | bluetoothctl
+                        print(funcOutput["result"])
+                if (time.time() - startTime < 75):
+                    print('no qr code data..try again')
+                    scanQRCode(startTime)
                 else:
-                    #try first time pin here
-                    #echo -e 'agent on \n pair ' + funcOutput["result"] + '\n 1234 \n quit' | bluetoothctl
-                    print(funcOutput["result"])
-                GPIO.output(25, GPIO.HIGH)
-                sleep(5)
-                os.system("sudo poweroff")
+                    #Enough tries
+                    poweroff()
+                    
             elif qrCodeOutputDict["Type"]=="Wifi":
                 print("wifi")
                 wifiName = qrCodeOutputDict["WifiName"]
                 wifiPassword = qrCodeOutputDict["WifiPassword"]
-                wifiEncryp = qrCodeOutputDict["WifiEncryption"]
                 userEmail = qrCodeOutputDict["UserEmail"]
                 userPassword = qrCodeOutputDict["UserPassword"]
                 saveUser(userEmail, userPassword)
-                #connectToWifi(wifiName, wifiPassword, wifiEncryp)             
+                connectToWifi(wifiName, wifiPassword)             
         except:
             pass
-            if (qrTry < 20) :
-                qrTry += 1
-                print('error with qr code data..try again')
-                scanQRCode()
-            else:
-                print('error with qr')
-                qrTry = 0
-
+    else:
+        print (time.time() - startTime)
+        if (time.time() - startTime < 75):
+                print('no qr code data..try again')
+                scanQRCode(startTime)
+        else:
+                #Enough tries
+                poweroff()
 
 def fetchCubes(deviceType):
     fetchCubesFromParse = Function("fetchCubes")
@@ -174,14 +187,12 @@ def fetchCubes(deviceType):
         for MAC in CubesMACLinkedToHub:
             print(MAC)
             os.system('sudo rfcomm release 0')
-            print("A")
             os.system('sudo rfcomm -A bind 0 ' + MAC)
-            print("B")
             if deviceType==2:
-                print("C")
                 getSensorCubeData()
             elif deviceType==1:
-                getCameraCubeData()
+                outputDict = getCameraCubeData()
+                saveCameraCubePic(outputDict) 
     except Exception as e:
         print('error fetching cubes')
         print(e)
@@ -211,67 +222,71 @@ def getSensorCubeData():
         pass
     os.system('sudo rfcomm release 0')
 
+
+def saveCameraCubePic(cameraCubeOutputDict):
+    print("saving...")
+    cubeID = cameraCubeOutputDict["cubeID"]
+    battery = float(cameraCubeOutputDict["battery"])
+    with open("cameraData.jpg", "rb") as image_file:
+        rawdata = image_file.read()
+    parsePhotoFile = File("cameraData.jpg", rawdata, 'image/jpg')
+    parsePhotoFile.save()
+    print(parsePhotoFile.url)
+    #Dictiornary with a "battery" : float , "cubeID" : String
+    CubeObject = CubeClass(objectId=cubeID)  
+    parseCameraData = CameraDataClass(photoFile = parsePhotoFile, battery = battery, cube = CubeObject)
+    parseCameraData.save()
+    print("save done")
+    os.system('sudo rfcomm release 0')
+
        
 def getCameraCubeData():
     print("getting data from camera cube")
-    bluetoothSerial = serial.Serial("/dev/rfcomm0", baudrate=38400)
+    bluetoothSerial = serial.Serial("/dev/rfcomm0", baudrate=9600)
+    print("Connected!")
     bluetoothSerial.write('a'.encode())
     sent = 0
-    randomFileName = randomstr(16) + ".jpeg"
-    file = open("cameradata.jpeg", "w")
+    file = open("cameraData.jpg", "w")
     #start_time = time.time()
     while not sent:
         cameraCubeOutput = bluetoothSerial.readline()
         file.write(cameraCubeOutput)
-        if(cameraCubeOutput.find('done') != -1): 
+        if(cameraCubeOutput.find('done') != -1):
+            print(cameraCubeOutput)
             CubeOutput = cameraCubeOutput.replace('done','')
             file.write(cameraCubeOutput)
             sent = 1
-            file.close
-    #print(time.time()-start_time) #this prints out how long it takes to send the photo through BT
+            file.close            
     print("done getting data from camera cube")
-    cameraBattery = float(bluetoothSerial.readline())
-    print(cameraBattery)
-    with open("cameradata.jpeg", "rb") as image_file:
-        rawdata = image_file.read()
-    parsePhotoFile = File("cameradata.jpeg", rawdata, 'image/jpeg')
-    parsePhotoFile.save()
-    print(parsePhotoFile.url)
-    #Dictiornary with a "battery" : float , "cubeID" : String
-    #CubePtr = CubeClass(objectId=CubeID)  
-    parseCameraData = CameraDataClass(photoFile = parsePhotoFile, battery = cameraBattery, cube = CubePtr)
-    parseCameraData.save()
-    os.system('sudo rfcomm release 0')
+    cameraCubeOutputString = bluetoothSerial.readline()
+    print(cameraCubeOutputString)
+    try:
+        cameraCubeOutputDict = ast.literal_eval(cameraCubeOutputString)
+        return cameraCubeOutputDict
+    except:
+        print("An exception has ocurred. Likely failed to convert data.")
+        pass
+
+
+
+wifiToggle()
+scanQRCode(time.time())
 
 if (GPIO.input(23)):
         #light sensor turn pi on
         print("sensor activated")
-        os.system("sudo ifdown wlan0")
-        sleep(5)
-        os.system("sudo ifup wlan0")
-        sleep(5)
-        logIn()
+        wifiToggle()
         fetchCubes(2)
         led.on()
         takePic()
         fetchCubes(1)
         led.off()
-        GPIO.output(25, GPIO.HIGH)
-        sleep(5)
-        os.system("sudo poweroff")
+        poweroff()
 if (GPIO.input(18)):
         #Button turned pi on
         print("button activated")
-        os.system("sudo ifdown wlan0")
-        sleep(5)
-        os.system("sudo ifup wlan0")
-        sleep(5)
-        logIn()
+        wifiToggle()
         scanQRCode()
-        GPIO.output(25, GPIO.HIGH)
-        sleep(5)
-        os.system("sudo poweroff")
-led.off()
   
 
 
