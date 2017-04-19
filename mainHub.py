@@ -22,6 +22,7 @@ import ast
 import qrtools
 import RPi.GPIO as GPIO
 import subprocess
+import pygame
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(18, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 GPIO.setup(23, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
@@ -52,7 +53,17 @@ camera = picamera.PiCamera()
 camera.rotation = 180
 
 bluetoothSerial = None
-logInSuccess = False  
+logInSuccess = False
+
+
+#8 -> 18
+#11 -> 23
+#12 <- 25
+
+def playSound():
+    pygame.mixer.init()
+    pygame.mixer.music.load('aaaa,wav')
+    pygame.music.play()
 
 def poweroff():
     print("powering off...")
@@ -91,13 +102,13 @@ def wifiToggle():
     print("setting up wifi")
     os.system("sudo ifdown wlan0")
     sleep(2)
-    p = subprocess.Popen(['sudo', 'ifdown', 'wlan0'])
-    try:
-        p.wait(10)
-    except:
-        print("sub timedout")
-        os.kill(p.pid, signal.SIGINT)
-    #os.system("sudo ifup wlan0")
+    #p = subprocess.Popen([os.system("echo a")])
+    #try:
+     #   p.wait(30)
+    #except:
+     #   print("sub timedout")
+    #    os.kill(p.pid, signal.SIGINT)
+    os.system("sudo ifup wlan0")
     sleep(2)
     print("log in")
     logIn()
@@ -108,6 +119,7 @@ def saveUser(userEmail, userPassword):
     f.close()
     
 def connectToWifi(wifiName, wifiPassword):
+    print("trying to connect")
     file = open("/etc/network/interfaces", "w")
     file.write("source-directory /etc/network/interfaces.d" + "\n")
     file.write("allow-hotplug wlan0"+ "\n")
@@ -166,8 +178,11 @@ def scanQRCode(startTime):
                 userEmail = qrCodeOutputDict["UserEmail"]
                 userPassword = qrCodeOutputDict["UserPassword"]
                 saveUser(userEmail, userPassword)
-                connectToWifi(wifiName, wifiPassword)             
-        except:
+                print("save done")
+                connectToWifi(wifiName, wifiPassword)
+                print("connect done")
+        except Exception as e:
+            print e
             pass
     else:
         print (time.time() - startTime)
@@ -269,7 +284,8 @@ def getCameraCubeData():
 
 
 
-wifiToggle()
+#wifiToggle()
+#connectToWifi("Ben's iPhone", "h8hv27hwkkhxq")
 scanQRCode(time.time())
 
 if (GPIO.input(23)):
@@ -286,7 +302,7 @@ if (GPIO.input(18)):
         #Button turned pi on
         print("button activated")
         wifiToggle()
-        scanQRCode()
+        scanQRCode(time.time())
   
 
 
