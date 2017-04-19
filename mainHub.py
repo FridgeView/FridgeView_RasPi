@@ -62,7 +62,7 @@ logInSuccess = False
 
 def playSound():
     pygame.mixer.init()
-    pygame.mixer.music.load('aaaa,wav')
+    pygame.mixer.music.load('Okay,aiff')
     pygame.music.play()
 
 def poweroff():
@@ -89,7 +89,7 @@ def logIn():
             addCentralHubToUser(centralHubId=CENTRALHUBID, userId = U.objectId)
             GPIO.output(25, GPIO.HIGH)
             sleep(5)
-            os.system("sudo poweroff")
+            #os.system("sudo poweroff")
             pass
         print("Connected successfully!")
     except Exception as e:
@@ -286,19 +286,23 @@ def getCameraCubeData():
 
 #wifiToggle()
 #connectToWifi("Ben's iPhone", "h8hv27hwkkhxq")
-scanQRCode(time.time())
-
-if (GPIO.input(23)):
-        #light sensor turn pi on
-        print("sensor activated")
+#scanQRCode(time.time())
+wifiToggle()
+fetchCubes(1)
+if (GPIO.input(23) and GPIO.input(18)):
+        #timer turned on pi
         wifiToggle()
         fetchCubes(2)
+        poweroff()
+elif (GPIO.input(23)):
+        #light sensor turn pi on
+        print("sensor activated")
         led.on()
         takePic()
         fetchCubes(1)
         led.off()
         poweroff()
-if (GPIO.input(18)):
+elif (GPIO.input(18)):
         #Button turned pi on
         print("button activated")
         wifiToggle()
