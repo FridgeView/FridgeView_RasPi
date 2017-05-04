@@ -28,6 +28,9 @@ GPIO.setup(18, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 GPIO.setup(23, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 GPIO.setup(25, GPIO.OUT, initial=GPIO.LOW)
 led = LED(17)
+blue = LED(13)
+red = LED(5)
+green = LED(6)
 button = Button(27)
 APPLICATION_ID = "FVAPPID123456789bcdjk"
 REST_API_KEY = "A"
@@ -55,21 +58,22 @@ camera.rotation = 180
 bluetoothSerial = None
 logInSuccess = False
 
+#p = subprocess.Popen([os.system("echo a")])
+#try:
+#p.wait(30)
+#except:
+#print("sub timedout")
+#os.kill(p.pid, signal.SIGINT)
 
 #8 -> 18
 #11 -> 23
 #12 <- 25
 
-def playSound():
-    pygame.mixer.init()
-    pygame.mixer.music.load('Okay,aiff')
-    pygame.music.play()
-
 def poweroff():
     print("powering off...")
     GPIO.output(25, GPIO.HIGH)
     sleep(5)
-    #os.system("sudo poweroff")
+    os.system("sudo poweroff")
 
 def logIn():
     global logInSuccess
@@ -83,17 +87,24 @@ def logIn():
         logInSuccess = True 
         try:
             print(U.defaultCentralHub)
+            red.off()
+            blue.on()
+            green.off()
         except:
             print("no central hub")
             addCentralHubToUser = Function("addPtrToCentralHub")
             addCentralHubToUser(centralHubId=CENTRALHUBID, userId = U.objectId)
-            GPIO.output(25, GPIO.HIGH)
-            sleep(5)
-            #os.system("sudo poweroff")
+            sleep(2)
+            red.off()
+            blue.on()
+            green.off()
             pass
         print("Connected successfully!")
     except Exception as e:
         print("Couldn't log in")
+        red.on()
+        blue.off()
+        green.off()
         logInSuccess = False
         print(e)
         pass
@@ -102,12 +113,6 @@ def wifiToggle():
     print("setting up wifi")
     os.system("sudo ifdown wlan0")
     sleep(2)
-    #p = subprocess.Popen([os.system("echo a")])
-    #try:
-     #   p.wait(30)
-    #except:
-     #   print("sub timedout")
-    #    os.kill(p.pid, signal.SIGINT)
     os.system("sudo ifup wlan0")
     sleep(2)
     print("log in")
@@ -117,6 +122,7 @@ def saveUser(userEmail, userPassword):
     f = open("info.txt", "w")
     f.write(userEmail + "\n" + userPassword)
     f.close()
+    scanQRCode(time.time())
     
 def connectToWifi(wifiName, wifiPassword):
     print("trying to connect")
@@ -129,33 +135,67 @@ def connectToWifi(wifiName, wifiPassword):
     file.write("    wpa-psk \""+wifiPassword+"\"" + "\n")               
     file.close()
     wifiToggle()
-    #os.system("sudo reboot")
 
 def takePic():
     randomFileName = "centralHubPhoto.jpg"
-    camera.capture(randomFileName)
-    print("I'm taking a photo!")
-    with open(randomFileName, "rb") as image_file:
-        rawdata = image_file.read()
-    parsePhotoFile = File(randomFileName, rawdata, 'image/jpg')
-    parsePhotoFile.save()
-    parseCentralHubData = CentralHubDataClass(photoFile = parsePhotoFile, centralHub = CentralHubObject)
-    parseCentralHubData.save()
-    
+    try:
+        camera.capture(randomFileName)
+        print("I'm taking a photo!")
+        with open(randomFileName, "rb") as image_file:
+            rawdata = image_file.read()
+        parsePhotoFile = File(randomFileName, rawdata, 'image/jpg')
+        parsePhotoFile.save()
+        parseCentralHubData = CentralHubDataClass(photoFile = parsePhotoFile, centralHub = CentralHubObject)
+        parseCentralHubData.save()
+    except:
+        red.on()
+        blue.off()
+        green.off()
+        sleep(4)
+        poweroff()
 def scanQRCode(startTime):
     print("taking photo for QR Scan")
-    camera.capture('qrPhoto.jpg')
+    red.on()
+    blue.on()
+    green.off()
+    try:
+        camera.capture('qrPhoto.jpg')
+    except:
+        red.on()
+        blue.off()
+        green.off()
+        sleep(4)
+        poweroff()
     from qrtools import QR
     qrCode = QR(filename = u"./qrPhoto.jpg")
     if qrCode.decode():
         print qrCode.data_to_string()
         try:
             qrCodeOutputDict = ast.literal_eval(qrCode.data_to_string())
-            if qrCodeOutputDict["Type"]=="Cube":
-                global logInSuccess
+            #blink green
+            red.off()
+            blue.off()
+            green.on()
+            sleep(1)
+            red.off()
+            blue.off()
+            green.off()
+            sleep(1)
+            red.off()
+            blue.off()
+            green.on()
+            sleep(1)
+            red.off()
+            blue.off()
+            green.off()
+            sleep(1)
+            red.off()
+            blue.off()
+            green.on()
+            if qrCodeOutputDict["t"]=="c":
                 if logInSuccess == True:   
                     newCubeFunc = Function("newCube")
-                    funcOutput = newCubeFunc(cubeID = qrCodeOutputDict["CubeID"], centralHubID = CENTRALHUBID)        
+                    funcOutput = newCubeFunc(cubeID = qrCodeOutputDict["i"], centralHubID = CENTRALHUBID)        
                     if funcOutput["result"] == "error":
                         print("Error!")
                     elif funcOutput["result"] == "in use":
@@ -169,28 +209,60 @@ def scanQRCode(startTime):
                     scanQRCode(startTime)
                 else:
                     #Enough tries
-                    poweroff()
-                    
-            elif qrCodeOutputDict["Type"]=="Wifi":
-                print("wifi")
-                wifiName = qrCodeOutputDict["WifiName"]
-                wifiPassword = qrCodeOutputDict["WifiPassword"]
-                userEmail = qrCodeOutputDict["UserEmail"]
-                userPassword = qrCodeOutputDict["UserPassword"]
+                    poweroff()                    
+            elif qrCodeOutputDict["t"]=="u":
+                print("user")
+                userEmail = qrCodeOutputDict["e"]
+                userPassword = qrCodeOutputDict["p"]
                 saveUser(userEmail, userPassword)
                 print("save done")
+            elif qrCodeOutputDict["t"]=="w":
+                print("wifi")
+                wifiName = qrCodeOutputDict["n"]
+                wifiPassword = qrCodeOutputDict["p"]
                 connectToWifi(wifiName, wifiPassword)
                 print("connect done")
+                if logInSuccess == False:
+                    print "log in failed!"
+                    red.on()
+                    blue.off()
+                    green.off()
+                    sleep(3)
+                    red.off()
+                    poweroff()
+                else:
+                    print "log in success"
+                    print time.time()
+                    scanQRCode(time.time())
+            else:
+                scanQRCode(startTime)
         except Exception as e:
             print e
+            scaQRCode(startTime)
             pass
     else:
+        print time.time()
         print (time.time() - startTime)
         if (time.time() - startTime < 75):
                 print('no qr code data..try again')
                 scanQRCode(startTime)
         else:
                 #Enough tries
+                blue.on()
+                green.off()
+                red.on()
+                sleep(1)
+                blue.off()
+                red.off()
+                sleep(1)
+                blue.on()
+                red.on()
+                sleep(1)
+                blue.off()
+                red.off()
+                sleep(1)
+                blue.on()
+                red.on()
                 poweroff()
 
 def fetchCubes(deviceType):
@@ -215,7 +287,7 @@ def fetchCubes(deviceType):
 
 
 def getSensorCubeData():
-    print("get sensor data")
+    print("get sensor data")    
     bluetoothSerial = serial.Serial("/dev/rfcomm0", baudrate=9600)
     sleep(5)
     print("sending 1")
@@ -262,6 +334,10 @@ def getCameraCubeData():
     bluetoothSerial.write('a'.encode())
     sent = 0
     file = open("cameraData.jpg", "w")
+    led.off()
+    red.off()
+    green.off()
+    blue.on()
     #start_time = time.time()
     while not sent:
         cameraCubeOutput = bluetoothSerial.readline()
@@ -283,30 +359,51 @@ def getCameraCubeData():
         pass
 
 
-
-#wifiToggle()
-#connectToWifi("Ben's iPhone", "h8hv27hwkkhxq")
-#scanQRCode(time.time())
-wifiToggle()
-fetchCubes(1)
 if (GPIO.input(23) and GPIO.input(18)):
         #timer turned on pi
+        print ("timer activated")
+        red.on()
+        blue.off()
+        green.on()
         wifiToggle()
-        fetchCubes(2)
+        if (logInSuccess == True):
+            fetchCubes(2)
         poweroff()
 elif (GPIO.input(23)):
         #light sensor turn pi on
         print("sensor activated")
-        led.on()
-        takePic()
-        fetchCubes(1)
+        red.on()
+        blue.on()
+        green.on()
+        wifiToggle()
+        if (logInSuccess == True):
+            led.on()
+            red.on()
+            blue.on()
+            green.on()
+            takePic()
+            fetchCubes(1)
+            led.off()
+            red.off()
+            blue.on()
+            green.off()
         led.off()
         poweroff()
 elif (GPIO.input(18)):
         #Button turned pi on
         print("button activated")
+        red.off()
+        blue.on()
+        green.on()
         wifiToggle()
         scanQRCode(time.time())
+else:
+        red.on()
+        blue.off()
+        green.off()
+        sleep(3)
+        red.off()
+        poweroff()
   
 
 
